@@ -1,5 +1,3 @@
-// server.js - Starter Express server for Week 2 assignment
-
 // Import required modules
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -17,6 +15,10 @@ const { NotFoundError } = require('./utils/errors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// TODO: Implement custom middleware for:
+// - Request logging
+// - Authentication
+// - Error handling
 // Middleware setup
 app.use(bodyParser.json());
 app.use(express.json());
@@ -58,9 +60,28 @@ app.get('/', (req, res) => {
 });
 
 // TODO: Implement the following routes:
-// GET /api/products - Get all products
-app.get('/api/products', (req, res)=> {
-  res.json(products);
+// GET /api/products - Get products with optional filtering and pagination
+app.get('/api/products', (req, res) => {
+  const { category, page = 1, limit = 5 } = req.query;
+
+  let filtered = products;
+
+  // 🔹 Filter by category if specified
+  if (category) {
+    filtered = filtered.filter(p => p.category.toLowerCase() === category.toLowerCase());
+  }
+
+  // 🔹 Pagination logic
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + parseInt(limit);
+  const paginated = filtered.slice(startIndex, endIndex);
+
+  res.json({
+    total: filtered.length,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    data: paginated
+  });
 });
 
 // GET /api/products/:id - Get a specific product
@@ -74,6 +95,7 @@ app.get('/api/products/:id', (req, res)=> {
     res.json(product);
   };
 });
+
 // POST /api/products - Create a new product
 app.post('/api/products', validateProduct, (req, res)=> {
   const { name, description, price, category, inStock } = req.body;
@@ -84,6 +106,7 @@ app.post('/api/products', validateProduct, (req, res)=> {
   products.push(newProduct);
   res.status(201).json({ message: 'Product Added', product: newProduct });
 });
+
 // PUT /api/products/:id - Update a product
 app.put('/api/products/:id', validateProduct, (req, res)=> {
   const id = req.params.id;
@@ -106,6 +129,7 @@ app.put('/api/products/:id', validateProduct, (req, res)=> {
   products[productIndex] = updatedProduct;
   res.json({ message: 'Product updated', product: updatedProduct });
 });
+
 // DELETE /api/products/:id - Delete a product
 app.delete('/api/products/:id', (req, res) => {
   const id = req.params.id;
@@ -119,23 +143,43 @@ app.delete('/api/products/:id', (req, res) => {
   res.json({ message: 'Product deleted' });
 });
 
-// Example route implementation for GET /api/products
-app.get('/api/products', (req, res) => {
-  res.json(products);
+// GET /api/products/search - Search products by name
+app.get('/api/products/search', (req, res) => {
+  const { name } = req.query;
+  if (!name) {
+    return res.status(400).json({ error: 'Please provide a name to search.' });
+  }
+
+  const results = products.filter(p =>
+    p.name.toLowerCase().includes(name.toLowerCase())
+  );
+
+  if (results.length === 0) {
+    return res.status(404).json({ message: 'No products found matching that name.' });
+  }
+
+  res.json({ count: results.length, results });
 });
 
-// TODO: Implement custom middleware for:
-// - Request logging
-// - Authentication
-// - Error handling
+// GET /api/products/stats - Get product statistics
+app.get('/api/products/stats', (req, res) => {
+  const stats = {};
+
+  products.forEach(p => {
+    stats[p.category] = (stats[p.category] || 0) + 1;
+  });
+
+  res.json({ totalProducts: products.length, countByCategory: stats });
+});
+
+// Handle undefined routes
+app.all('*', (req, res, next) => {
+  next(new NotFoundError(`Cannot find ${req.originalUrl} on this server`));
+});
 
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
-});
-
-app.all('*', (req, res, next) => {
-  next(new NotFoundError(`Cannot find ${req.originalUrl} on this server`));
 });
 
 // Export the app for testing purposes
